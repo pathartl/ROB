@@ -133,6 +133,10 @@ public class Program
                     await CheckPrice(userMessage);
                     break;
 
+                case "!guessname":
+                    await GuessName(userMessage);
+                    break;
+
                 default:
                     await GetQuote(command.TrimStart('!'), userMessage);
                     break;
@@ -154,6 +158,66 @@ public class Program
         var quote = Context.GetRandomQuote(command);
 
         await message.Channel.SendMessageAsync($"**{quote}**");
+    }
+
+    private async Task GuessName(SocketUserMessage message)
+    {
+        // How much over/under we can be on the word in the title
+        var wordSizeSlop = 1;
+
+        try
+        {
+            var splitMessage = message.CleanContent.Split(" ", StringSplitOptions.RemoveEmptyEntries);
+
+            var potentialNames = new List<string>();
+
+            var games = await PriceChartingClient.GetAllGames(GetSystemFromShortname(splitMessage[1]));
+            var wordLengths = splitMessage[2].Split('-').Select(wl => Int32.Parse(wl)).ToList();
+
+            // The count - 1 at the end is for number of spaces
+            var maxLengthHigh = wordLengths.Select(wl => wl + wordSizeSlop).Sum() + (wordLengths.Count - 1);
+            var maxLengthLow = wordLengths.Where(wl => wl > wordSizeSlop).Select(wl => wl - 2).Sum() + wordLengths.Where(wl => wl <= wordSizeSlop).Sum();
+
+            foreach (var game in games)
+            {
+                // First skip out if we're not in the ball park at all
+                if (game.Title.Length < maxLengthLow || game.Title.Length > maxLengthHigh)
+                    continue;
+
+                var valid = true;
+
+                // Split the title, see if it fits our shit
+                var words = game.Title.Split(' ');
+
+                // Stupid basic, doesn't match the number of words
+                if (words.Length != wordLengths.Count)
+                    continue;
+
+                for (int i = 0; i < words.Length; i++)
+                {
+                    var high = wordLengths[i] + wordSizeSlop;
+                    var low = words[i].Length < wordSizeSlop ? 1 : wordLengths[i] - wordSizeSlop;
+
+                    if (words[i].Length > high || words[i].Length < low)
+                        valid = false;
+                }
+
+                if (valid)
+                    potentialNames.Add(game.Title);
+            }
+
+            var embed = new EmbedBuilder()
+                .WithTitle($"I found {potentialNames.Count} potential match{(potentialNames.Count == 1 ? "" : "es")}")
+                .WithDescription($"```{String.Join("\n", potentialNames)}```")
+                .WithFooter(footer => footer.Text = "Generated with info from VGPC")
+                .WithCurrentTimestamp();
+
+            await message.ReplyAsync(embed: embed.Build());
+        }
+        catch (Exception e)
+        {
+            await message.ReplyAsync("Are you stupid or am I broken? Syntax is `!guessname ps1 6-1-2-6`");
+        }
     }
 
     private async Task CheckPrice(SocketUserMessage message)
@@ -207,6 +271,19 @@ public class Program
         {
             await message.Channel.SendMessageAsync("Sorry, I couldn't find that game. Try again!");
         }
+    }
+
+    private string GetSystemFromShortname(string input)
+    {
+        string system = "";
+
+        foreach (var systemShortnames in SystemShortnames)
+        {
+            if (systemShortnames.Value.Contains(input))
+                system = systemShortnames.Key;
+        }
+
+        return system;
     }
 
     private async Task ReplyWithTable(SocketUserMessage message, PriceChartingPriceResponse response)

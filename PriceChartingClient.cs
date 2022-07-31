@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using Newtonsoft.Json;
 using ROB.Models;
 using System;
 using System.Collections.Generic;
@@ -18,6 +19,8 @@ namespace ROB
         {
             HttpClient = new HttpClient();
         }
+
+        private Dictionary<string, IEnumerable<PriceChartingConsoleGame>> AllGamesResponseCache = new Dictionary<string, IEnumerable<PriceChartingConsoleGame>>();
 
         public async Task<PriceChartingPriceResponse> GetGamePrices(string system, string query)
         {
@@ -146,11 +149,45 @@ namespace ROB
             throw new Exception("Couldn't scrape game");
         }
 
+        public async Task<IEnumerable<PriceChartingConsoleGame>> GetAllGames(string system)
+        {
+            int cursor = 0;
+            int lastPageCount = 50;
+            int pageCount = 50;
+
+            if (AllGamesResponseCache.ContainsKey(system))
+                return AllGamesResponseCache[system];
+
+            var games = new List<PriceChartingConsoleGame>();
+
+            while (lastPageCount == 50)
+            {
+                var response = await GetJson<PriceChartingConsoleGameReponse>($"console/{system}?sort=name&cursor={cursor}&format=json");
+
+                lastPageCount = response.Games.Count();
+
+                games.AddRange(response.Games);
+                    
+                cursor += pageCount;
+            }
+
+            AllGamesResponseCache[system] = games;
+
+            return games;
+        }
+
         private async Task<string> GetHtml(string route)
         {
             var response = await HttpClient.GetStringAsync($"{BaseUrl}{route}");
 
             return response;
+        }
+
+        private async Task<T> GetJson<T>(string route)
+        {
+            var response = await HttpClient.GetStringAsync($"{BaseUrl}{route}");
+
+            return JsonConvert.DeserializeObject<T>(response);
         }
 
         private static decimal ParsePrice(string input)
