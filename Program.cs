@@ -233,13 +233,12 @@ public class Program
             {
                 var potentialSystem = splitMessage[1];
 
-                foreach (var systemShortnames in SystemShortnames)
-                {
-                    if (systemShortnames.Value.Contains(potentialSystem))
-                        system = systemShortnames.Key;
-                }
+                system = GetSystemFromShortname(potentialSystem);
 
-                title = String.Join(' ', splitMessage.Skip(2));
+                if (!String.IsNullOrWhiteSpace(system))
+                    title = String.Join(' ', splitMessage.Skip(2));
+                else
+                    title = String.Join(" ", splitMessage.Skip(1));
             }
             else
             {
