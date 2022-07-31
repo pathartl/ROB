@@ -117,7 +117,8 @@ namespace ROB
                 Url = url
             };
 
-            response.Url = $"{BaseUrl}{response.Url}";
+            if (!response.Url.Contains(BaseUrl))
+                response.Url = $"{BaseUrl}{response.Url}";
 
             html = html.Replace("\n", " ").Replace("&nbsp;", " ");
 
